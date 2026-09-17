@@ -1,0 +1,298 @@
+"""数据模型定义"""
+
+from typing import Dict, List, Optional, Union
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+# ============ 请求模型 ============
+
+class TripRequest(BaseModel):
+    """旅行规划请求"""
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "city": "北京", "start_date": "2025-06-01", "end_date": "2025-06-03",
+        "travel_days": 3, "transportation": "公共交通", "accommodation": "经济型酒店",
+        "preferences": ["历史文化", "美食"], "free_text_input": "希望多安排一些博物馆",
+    }})
+
+    city: str = Field(..., description="目的地城市")
+    start_date: str = Field(..., description="开始日期 YYYY-MM-DD")
+    end_date: str = Field(..., description="结束日期 YYYY-MM-DD")
+    travel_days: int = Field(..., description="旅行天数", ge=1, le=30)
+    transportation: str = Field(..., description="交通方式")
+    accommodation: str = Field(..., description="住宿偏好")
+    preferences: List[str] = Field(default_factory=list, description="旅行偏好标签")
+    free_text_input: Optional[str] = Field(default="", description="额外要求")
+    max_budget: Optional[int] = Field(default=None, ge=0, description="总预算上限（元）")
+    max_daily_attractions: int = Field(default=3, ge=1, le=6, description="每日最多景点数")
+    accessibility_needs: List[str] = Field(default_factory=list, description="无障碍、饮食或同行人约束")
+    knowledge_source_ids: List[str] = Field(default_factory=list, description="本次规划限定使用的个人资料 ID")
+    daily_start_time: str = Field(default="09:00", pattern=r"^\d{2}:\d{2}$", description="每日最早开始时间")
+    daily_end_time: str = Field(default="20:00", pattern=r"^\d{2}:\d{2}$", description="每日最晚结束时间")
+    enable_experience_learning: bool = Field(default=False, description="是否授权将脱敏后的完整样本用于数据飞轮")
+    
+class POISearchRequest(BaseModel):
+    """POI搜索请求"""
+    keywords: str = Field(..., description="搜索关键词")
+    city: str = Field(..., description="城市")
+    citylimit: bool = Field(default=True, description="是否限制在城市范围内")
+
+
+class RouteRequest(BaseModel):
+    """路线规划请求"""
+    origin_address: str = Field(..., description="起点地址")
+    destination_address: str = Field(..., description="终点地址")
+    origin_city: Optional[str] = Field(default=None, description="起点城市")
+    destination_city: Optional[str] = Field(default=None, description="终点城市")
+    route_type: str = Field(default="walking", description="路线类型: walking/driving/transit")
+
+
+# ============ 响应模型 ============
+
+class Location(BaseModel):
+    """地理位置"""
+    longitude: float = Field(..., description="经度")
+    latitude: float = Field(..., description="纬度")
+
+
+class Attraction(BaseModel):
+    """景点信息"""
+    name: str = Field(..., description="景点名称")
+    address: str = Field(..., description="地址")
+    location: Optional[Location] = Field(default=None, description="经纬度坐标；未被工具验证时为空")
+    visit_duration: int = Field(..., description="建议游览时间(分钟)")
+    description: str = Field(..., description="景点描述")
+    category: Optional[str] = Field(default="景点", description="景点类别")
+    rating: Optional[float] = Field(default=None, description="评分")
+    photos: Optional[List[str]] = Field(default_factory=list, description="景点图片URL列表")
+    poi_id: Optional[str] = Field(default="", description="POI ID")
+    image_url: Optional[str] = Field(default=None, description="图片URL")
+    ticket_price: int = Field(default=0, description="门票价格(元)")
+    opening_time: str = Field(default="09:00", pattern=r"^\d{2}:\d{2}$", description="开放时间")
+    closing_time: str = Field(default="17:00", pattern=r"^\d{2}:\d{2}$", description="闭馆时间")
+    priority_score: int = Field(default=50, ge=0, le=100, description="兴趣与证据综合优先级")
+    evidence_confidence: float = Field(default=0.5, ge=0.0, le=1.0, description="事实证据置信度")
+    scheduled_start: Optional[str] = Field(default=None, description="求解器安排的开始时间")
+    scheduled_end: Optional[str] = Field(default=None, description="求解器安排的结束时间")
+
+
+class Meal(BaseModel):
+    """餐饮信息"""
+    type: str = Field(..., description="餐饮类型: breakfast/lunch/dinner/snack")
+    name: str = Field(..., description="餐饮名称")
+    address: Optional[str] = Field(default=None, description="地址")
+    location: Optional[Location] = Field(default=None, description="经纬度坐标")
+    description: Optional[str] = Field(default=None, description="描述")
+    estimated_cost: int = Field(default=0, description="预估费用(元)")
+
+
+class Hotel(BaseModel):
+    """酒店信息"""
+    name: str = Field(..., description="酒店名称")
+    address: str = Field(default="", description="酒店地址")
+    location: Optional[Location] = Field(default=None, description="酒店位置")
+    price_range: str = Field(default="", description="价格范围")
+    rating: str = Field(default="", description="评分")
+    distance: str = Field(default="", description="距离景点距离")
+    type: str = Field(default="", description="酒店类型")
+    estimated_cost: int = Field(default=0, description="预估费用(元/晚)")
+
+
+class DayPlan(BaseModel):
+    """单日行程"""
+    date: str = Field(..., description="日期 YYYY-MM-DD")
+    day_index: int = Field(..., description="第几天(从0开始)")
+    description: str = Field(..., description="当日行程描述")
+    transportation: str = Field(..., description="交通方式")
+    accommodation: str = Field(..., description="住宿")
+    hotel: Optional[Hotel] = Field(default=None, description="推荐酒店")
+    attractions: List[Attraction] = Field(default_factory=list, description="景点列表")
+    meals: List[Meal] = Field(default_factory=list, description="餐饮列表")
+
+
+class WeatherInfo(BaseModel):
+    """天气信息"""
+    date: str = Field(..., description="日期 YYYY-MM-DD")
+    day_weather: str = Field(default="", description="白天天气")
+    night_weather: str = Field(default="", description="夜间天气")
+    day_temp: Union[int, str] = Field(default=0, description="白天温度")
+    night_temp: Union[int, str] = Field(default=0, description="夜间温度")
+    wind_direction: str = Field(default="", description="风向")
+    wind_power: str = Field(default="", description="风力")
+
+    @field_validator('day_temp', 'night_temp', mode='before')
+    @classmethod
+    def parse_temperature(cls, v):
+        """解析温度,移除°C等单位"""
+        if isinstance(v, str):
+            # 移除°C, ℃等单位符号
+            v = v.replace('°C', '').replace('℃', '').replace('°', '').strip()
+            try:
+                return int(v)
+            except ValueError:
+                return 0
+        return v
+
+
+class Budget(BaseModel):
+    """预算信息"""
+    total_attractions: int = Field(default=0, description="景点门票总费用")
+    total_hotels: int = Field(default=0, description="酒店总费用")
+    total_meals: int = Field(default=0, description="餐饮总费用")
+    total_transportation: int = Field(default=0, description="交通总费用")
+    total: int = Field(default=0, description="总费用")
+
+
+class OptimizationReport(BaseModel):
+    """CP-SAT 行程求解报告。"""
+    status: str
+    objective_value: Optional[float] = None
+    selected_attractions: int = 0
+    dropped_attractions: List[str] = Field(default_factory=list)
+    estimated_travel_minutes: int = 0
+    solver_time_ms: int = 0
+    fallback_used: bool = False
+
+
+class EvidenceReport(BaseModel):
+    """Agentic Evidence Retrieval 的路由与充分性报告。"""
+    strategy: str
+    rationale: str = ""
+    queries: List[str] = Field(default_factory=list)
+    retrieval_rounds: int = 0
+    source_count: int = 0
+    candidate_chunks: int = 0
+    selected_chunks: int = 0
+    context_chars: int = 0
+    coverage: float = Field(default=0.0, ge=0.0, le=1.0)
+    sufficient: bool = False
+    missing_aspects: List[str] = Field(default_factory=list)
+    fallback_used: bool = False
+
+
+class TripPlan(BaseModel):
+    """旅行计划"""
+    city: str = Field(..., description="目的地城市")
+    start_date: str = Field(..., description="开始日期")
+    end_date: str = Field(..., description="结束日期")
+    days: List[DayPlan] = Field(..., description="每日行程")
+    weather_info: List[WeatherInfo] = Field(default_factory=list, description="天气信息")
+    overall_suggestions: str = Field(..., description="总体建议")
+    budget: Optional[Budget] = Field(default=None, description="预算信息")
+    citations: List["SourceCitation"] = Field(default_factory=list, description="规划引用的资料证据")
+    validation_report: Optional["ValidationReport"] = Field(default=None, description="确定性约束校验结果")
+    optimization_report: Optional[OptimizationReport] = Field(default=None, description="约束求解报告")
+    evidence_report: Optional[EvidenceReport] = Field(default=None, description="证据路由与上下文充分性报告")
+    planning_trace_id: Optional[str] = Field(default=None, description="本次规划链路标识")
+    revision: int = Field(default=0, description="动态重规划版本号")
+
+
+class SourceCitation(BaseModel):
+    """可回溯的检索证据。"""
+    source_id: str
+    source_name: str
+    chunk_id: str
+    excerpt: str
+    score: float = 0.0
+    retrieval_strategy: str = "hybrid_multi_query"
+
+
+class ValidationIssue(BaseModel):
+    """单项规划约束问题。"""
+    code: str
+    severity: str
+    path: str
+    message: str
+    expected: Optional[str] = None
+    actual: Optional[str] = None
+
+
+class ValidationReport(BaseModel):
+    """规划校验报告，可直接用于自动重规划。"""
+    passed: bool
+    score: float = Field(ge=0.0, le=1.0)
+    issues: List[ValidationIssue] = Field(default_factory=list)
+    checks: Dict[str, bool] = Field(default_factory=dict)
+    repair_attempted: bool = False
+
+
+class TripPlanResponse(BaseModel):
+    """旅行计划响应"""
+    success: bool = Field(..., description="是否成功")
+    message: str = Field(default="", description="消息")
+    data: Optional[TripPlan] = Field(default=None, description="旅行计划数据")
+
+
+class Disruption(BaseModel):
+    """运行中行程扰动。"""
+    type: str = Field(description="attraction_closed/weather/delay/budget_changed/user_change")
+    date: Optional[str] = None
+    target: Optional[str] = None
+    delay_minutes: int = Field(default=0, ge=0)
+    new_budget: Optional[int] = Field(default=None, ge=0)
+    description: str = ""
+
+
+class AdaptiveReplanRequest(BaseModel):
+    request: TripRequest
+    current_plan: TripPlan
+    disruption: Disruption
+
+
+class TripFeedbackRequest(BaseModel):
+    trace_id: str = Field(min_length=8)
+    accepted: bool
+    rating: Optional[int] = Field(default=None, ge=1, le=5)
+    comment: str = Field(default="", max_length=2000)
+    corrected_plan: Optional[TripPlan] = None
+
+
+class POIInfo(BaseModel):
+    """POI信息"""
+    id: str = Field(..., description="POI ID")
+    name: str = Field(..., description="名称")
+    type: str = Field(..., description="类型")
+    address: str = Field(..., description="地址")
+    location: Location = Field(..., description="经纬度坐标")
+    tel: Optional[str] = Field(default=None, description="电话")
+
+
+class POISearchResponse(BaseModel):
+    """POI搜索响应"""
+    success: bool = Field(..., description="是否成功")
+    message: str = Field(default="", description="消息")
+    data: List[POIInfo] = Field(default=[], description="POI列表")
+
+
+class RouteInfo(BaseModel):
+    """路线信息"""
+    distance: float = Field(..., description="距离(米)")
+    duration: int = Field(..., description="时间(秒)")
+    route_type: str = Field(..., description="路线类型")
+    description: str = Field(..., description="路线描述")
+
+
+class RouteResponse(BaseModel):
+    """路线规划响应"""
+    success: bool = Field(..., description="是否成功")
+    message: str = Field(default="", description="消息")
+    data: Optional[RouteInfo] = Field(default=None, description="路线信息")
+
+
+class WeatherResponse(BaseModel):
+    """天气查询响应"""
+    success: bool = Field(..., description="是否成功")
+    message: str = Field(default="", description="消息")
+    data: List[WeatherInfo] = Field(default=[], description="天气信息")
+
+
+# ============ 错误响应 ============
+
+class ErrorResponse(BaseModel):
+    """错误响应"""
+    success: bool = Field(default=False, description="是否成功")
+    message: str = Field(..., description="错误消息")
+    error_code: Optional[str] = Field(default=None, description="错误代码")
+
+
+# TripPlan 中使用了后置声明的证据与校验模型。
+TripPlan.model_rebuild()

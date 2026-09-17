@@ -1,0 +1,14 @@
+{
+  "city": "北京",
+  "travel_days": 3,
+  "transportation": "公共交通",
+  "accommodation": "舒适型酒店",
+  "preferences": ["历史文化", "博物馆"],
+  "free_text_input": "每天最多两个景点，路线不要太赶；发生临时闭馆时只调整受影响日期。",
+  "max_budget": 3600,
+  "max_daily_attractions": 2,
+  "accessibility_needs": ["花生严重过敏"],
+  "daily_start_time": "09:00",
+  "daily_end_time": "18:00",
+  "enable_experience_learning": true
+}
